@@ -20,6 +20,9 @@ echo ""
 echo "🔄 System Packages များ Update လုပ်နေပါသည်..."
 sudo apt update && sudo apt upgrade -y
 
+# မလိုအပ်သော APT Packages များကို အလိုအလျောက် Clean လုပ်ခြင်း
+sudo apt autoremove -y
+
 echo "🔄 Python3, PIP နှင့် dependencies များ Install လုပ်နေပါသည်..."
 sudo apt install -y python3 python3-pip python3-venv sqlite3 curl
 
@@ -32,14 +35,19 @@ then
     sudo npm install pm2 -g
 fi
 
-# ၂. Python Virtual Environment (venv) ဖန်တီးခြင်း
-echo "🔄 Python Virtual Environment (venv) ဖန်တီးနေပါသည်..."
-python3 -m venv venv
+# ၂. Python Virtual Environment (venv) အသစ်ပြန်လည် ဖန်တီးခြင်း
+echo "🔄 Python Virtual Environment (venv) သန့်သန့် ဖန်တီးနေပါသည်..."
+rm -rf venv
+python3 -m venv --without-pip venv
 source venv/bin/activate
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+python3 get-pip.py
+rm get-pip.py
 
 echo "🔄 Python Dependencies (python-telegram-bot) Install လုပ်နေပါသည်..."
+# PEP 668 / Debian System Package Error ကို ကျော်လွန်ရန် --break-system-packages သုံးထားပါသည်
 pip install --upgrade pip
-pip install python-telegram-bot
+pip install python-telegram-bot --break-system-packages
 
 # ၃. bot.py File ကို အလိုအလျောက် ရေးသားဖန်တီးခြင်း
 echo "🔄 bot.py ဖိုင်ကို ရေးသားနေပါသည်..."
@@ -422,7 +430,7 @@ sed -i "s/REPLACE_BOT_TOKEN/$BOT_TOKEN/" bot.py
 
 echo "✅ bot.py အား အောင်မြင်စွာ ရေးသားပြီးပါပြီ!"
 
-# ၅. PM2 ဖြင့် venv ထဲမှ Python ကို သုံး၍ Background 24/7 Run ခြင်း နှင့် System Startup ပြုလုပ်ခြင်း
+# ၅. PM2 ဖြင့် Background 24/7 Run ခြင်း
 echo "🚀 PM2 ဖြင့် Telegram Bot ကို Background တွင် စတင် Run နေပါသည်..."
 pm2 stop vps-bot 2>/dev/null || true
 pm2 delete vps-bot 2>/dev/null || true
@@ -435,7 +443,5 @@ sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -
 echo ""
 echo "=========================================="
 echo "🎉 Installation အောင်မြင်စွာ ပြီးဆုံးပါပြီ!"
-echo "📌 PM2 background 24/7 process ကို သတ်မှတ်ပြီးပါပြီ။"
-echo "📌 Terminal ပိတ်လိုက်သော်လည်း သို့မဟုတ် VPS Restart ဖြစ်သော်လည်း Bot အမြဲ run နေပါမည်။"
 echo "🤖 Telegram Bot သို့သွားရောက်၍ /start ရိုက်ပြီး စတင်အသုံးပြုနိုင်ပါပြီ။"
 echo "=========================================="
