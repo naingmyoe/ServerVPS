@@ -23,7 +23,7 @@ sudo apt update && sudo apt upgrade -y
 echo "🔄 Python3, PIP နှင့် dependencies များ Install လုပ်နေပါသည်..."
 sudo apt install -y python3 python3-pip python3-venv sqlite3 curl
 
-# PM2 Install (Bot ကို background တွင် 24/7 run ထားနိုင်ရန်)
+# PM2 Install (Terminal ပိတ်ထားလည်း background တွင် 24/7 run ထားနိုင်ရန်)
 if ! command -v pm2 &> /dev/null
 then
     echo "🔄 PM2 Process Manager Install လုပ်နေပါသည်..."
@@ -416,15 +416,20 @@ sed -i "s/REPLACE_BOT_TOKEN/$BOT_TOKEN/" bot.py
 
 echo "✅ bot.py အား အောင်မြင်စွာ ရေးသားပြီးပါပြီ!"
 
-# ၄. PM2 ဖြင့် Bot ကို စတင် Run ခြင်း
+# ၄. PM2 ဖြင့် Background 24/7 Run ခြင်း နှင့် VPS Startup ပြုလုပ်ခြင်း
 echo "🚀 PM2 ဖြင့် Telegram Bot ကို Background တွင် စတင် Run နေပါသည်..."
 pm2 stop vps-bot 2>/dev/null || true
 pm2 delete vps-bot 2>/dev/null || true
 pm2 start bot.py --name "vps-bot" --interpreter python3
+
+# VPS Reboot ဖြစ်လျှင်တောင် အလိုအလျောက် ပြန် run စေရန် စနစ်ထည့်သွင်းခြင်း
 pm2 save
+sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $USER --hp $HOME 2>/dev/null || pm2 startup || true
 
 echo ""
 echo "=========================================="
 echo "🎉 Installation အောင်မြင်စွာ ပြီးဆုံးပါပြီ!"
+echo "📌 PM2 background 24/7 process ကို သတ်မှတ်ပြီးပါပြီ။"
+echo "📌 Terminal ပိတ်လိုက်သော်လည်း သို့မဟုတ် VPS Restart ဖြစ်သော်လည်း Bot အမြဲ run နေပါမည်။"
 echo "🤖 Telegram Bot သို့သွားရောက်၍ /start ရိုက်ပြီး စတင်အသုံးပြုနိုင်ပါပြီ။"
 echo "=========================================="
