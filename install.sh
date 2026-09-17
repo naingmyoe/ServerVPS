@@ -32,10 +32,16 @@ then
     sudo npm install pm2 -g
 fi
 
-echo "🔄 Python Dependencies (python-telegram-bot) Install လုပ်နေပါသည်..."
-pip3 install python-telegram-bot --break-system-packages || pip3 install python-telegram-bot
+# ၂. Python Virtual Environment (venv) ဖန်တီးခြင်း
+echo "🔄 Python Virtual Environment (venv) ဖန်တီးနေပါသည်..."
+python3 -m venv venv
+source venv/bin/activate
 
-# ၂. bot.py File ကို အလိုအလျောက် ရေးသားဖန်တီးခြင်း
+echo "🔄 Python Dependencies (python-telegram-bot) Install လုပ်နေပါသည်..."
+pip install --upgrade pip
+pip install python-telegram-bot
+
+# ၃. bot.py File ကို အလိုအလျောက် ရေးသားဖန်တီးခြင်း
 echo "🔄 bot.py ဖိုင်ကို ရေးသားနေပါသည်..."
 
 cat << 'EOF' > bot.py
@@ -410,19 +416,19 @@ if __name__ == "__main__":
     main()
 EOF
 
-# ၃. ရိုက်ထည့်ထားသော Admin ID နှင့် Token များကို bot.py ထဲတွင် အစားထိုးခြင်း
+# ၄. ရိုက်ထည့်ထားသော Admin ID နှင့် Token များကို bot.py ထဲတွင် အစားထိုးခြင်း
 sed -i "s/REPLACE_ADMIN_ID/$ADMIN_ID/" bot.py
 sed -i "s/REPLACE_BOT_TOKEN/$BOT_TOKEN/" bot.py
 
 echo "✅ bot.py အား အောင်မြင်စွာ ရေးသားပြီးပါပြီ!"
 
-# ၄. PM2 ဖြင့် Background 24/7 Run ခြင်း နှင့် VPS Startup ပြုလုပ်ခြင်း
+# ၅. PM2 ဖြင့် venv ထဲမှ Python ကို သုံး၍ Background 24/7 Run ခြင်း နှင့် System Startup ပြုလုပ်ခြင်း
 echo "🚀 PM2 ဖြင့် Telegram Bot ကို Background တွင် စတင် Run နေပါသည်..."
 pm2 stop vps-bot 2>/dev/null || true
 pm2 delete vps-bot 2>/dev/null || true
-pm2 start bot.py --name "vps-bot" --interpreter python3
+pm2 start ./venv/bin/python --name "vps-bot" -- bot.py
 
-# VPS Reboot ဖြစ်လျှင်တောင် အလိုအလျောက် ပြန် run စေရန် စနစ်ထည့်သွင်းခြင်း
+# Terminal ပိတ်သွားလည်း/VPS Reboot ဖြစ်သွားလည်း အလိုအလျောက် ပြန် run အောင် သိမ်းဆည်းခြင်း
 pm2 save
 sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $USER --hp $HOME 2>/dev/null || pm2 startup || true
 
