@@ -44,10 +44,9 @@ curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
 python3 get-pip.py
 rm get-pip.py
 
-echo "🔄 Python Dependencies (python-telegram-bot) Install လုပ်နေပါသည်..."
-# PEP 668 / Debian System Package Error ကို ကျော်လွန်ရန် --break-system-packages သုံးထားပါသည်
+echo "🔄 Python Dependencies (python-telegram-bot & APScheduler) Install လုပ်နေပါသည်..."
 pip install --upgrade pip
-pip install python-telegram-bot --break-system-packages
+pip install "python-telegram-bot[job-queue]" --break-system-packages
 
 # ၃. bot.py File ကို အလိုအလျောက် ရေးသားဖန်တီးခြင်း
 echo "🔄 bot.py ဖိုင်ကို ရေးသားနေပါသည်..."
@@ -55,7 +54,7 @@ echo "🔄 bot.py ဖိုင်ကို ရေးသားနေပါသည�
 cat << 'EOF' > bot.py
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, time
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, 
     ReplyKeyboardMarkup, KeyboardButton
@@ -104,10 +103,42 @@ def get_remaining_days(expire_date_str):
         today = datetime.now().date()
         return (expire_date - today).days
     except Exception:
-        return "N/A"
+        return None
 
 def is_admin(user_id: int) -> bool:
     return user_id == ADMIN_ID
+
+# ၅ ရက်နှင့် ၅ ရက်အောက် သက်တမ်းကျန်သော Server များကို စစ်ဆေး၍ Auto Notification ပို့ပေးသည့် Function
+async def check_expiring_servers(context: ContextTypes.DEFAULT_TYPE):
+    conn = sqlite3.connect("vps_tracker.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT owner_name, server_name, ip_address, expire_date FROM servers")
+    servers = cursor.fetchall()
+    conn.close()
+
+    expiring_list = []
+    for s in servers:
+        owner, name, ip, expire = s
+        rem = get_remaining_days(expire)
+        if rem is not None and rem <= 5:
+            expiring_list.append((owner, name, ip, expire, rem))
+
+    if expiring_list:
+        msg = "⚠️ **VPS Expiration Alert!**\n\nအောက်ပါ Server များသည် ၅ ရက် သို့မဟုတ် ၅ ရက်အောက်သာ သက်တမ်း ကျန်ရှိပါတော့သည်:\n\n"
+        for owner, name, ip, expire, rem in expiring_list:
+            if rem < 0:
+                status = f"❌ Expired ({abs(rem)} days ago)"
+            elif rem == 0:
+                status = "⚠️ Today Expire!"
+            else:
+                status = f"⏳ {rem} days remaining"
+            
+            msg += f"👤 **Owner:** {owner}\n🖥 **Server:** `{name}` (`{ip}`)\n📅 **Expire:** `{expire}` ({status})\n───────────────────\n"
+        
+        try:
+            await context.bot.send_message(chat_id=ADMIN_ID, text=msg, parse_mode="Markdown")
+        except Exception as e:
+            logging.error(f"Failed to send notification: {e}")
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
@@ -121,7 +152,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
     await update.message.reply_text(
-        "👋 **မင်္ဂလာပါ Admin!**\n\nVPS Server များ စီမံခန့်ခွဲရန် အောက်ပါ Menu ခလုတ်များကို အသုံးပြုနိုင်ပါသည်။",
+        "👋 **မင်္ဂလာပါ Admin!**\n\nVPS Server များ စီမံခန့်ခွဲရန် အောက်ပါ Menu ခလုတ်များကို အသုံးပြုနိုင်ပါသည်။\n\n🔔 *သက်တမ်း ၅ ရက်အလို Server များကို နေ့စဉ် နံနက် ၉ နာရီတွင် အလိုအလျောက် Notification ပို့ပေးမည် ဖြစ်ပါသည်။*",
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
@@ -280,7 +311,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _, owner, name, ip, user, pwd, link, expire, remark = s
             remaining = get_remaining_days(expire)
             
-            rem_str = f"⚠️ {remaining} days" if isinstance(remaining, int) and remaining <= 7 else f"{remaining} days"
+            rem_str = f"⚠️ {remaining} days" if remaining is not None and remaining <= 5 else f"{remaining} days"
 
             text = (
                 f"🖥 **Server Details**\n\n"
@@ -382,6 +413,13 @@ def main():
     
     app = Application.builder().token(TOKEN).build()
 
+    # Daily Background Job Scheduler - နေ့စဉ် နံနက် ၉:၀၀ နာရီတွင် အလိုအလျောက် စစ်ဆေးမည့် Schedule
+    if app.job_queue:
+        app.job_queue.run_daily(
+            check_expiring_servers,
+            time=time(hour=9, minute=0, second=0)
+        )
+
     add_handler = ConversationHandler(
         entry_points=[
             CommandHandler("add", start_add),
@@ -443,5 +481,6 @@ sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -
 echo ""
 echo "=========================================="
 echo "🎉 Installation အောင်မြင်စွာ ပြီးဆုံးပါပြီ!"
+echo "🔔 ၅ ရက် သို့မဟုတ် ၅ ရက်အောက်ကျန်သော Server များကို နေ့စဉ် နံနက် ၉:၀၀ နာရီတွင် အလိုအလျောက် Notification ပို့ပေးပါမည်။"
 echo "🤖 Telegram Bot သို့သွားရောက်၍ /start ရိုက်ပြီး စတင်အသုံးပြုနိုင်ပါပြီ။"
 echo "=========================================="
